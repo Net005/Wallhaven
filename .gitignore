@@ -1,0 +1,8 @@
+/wallhaven-control
+/data/
+/wallpapers/
+.env
+*.part
+
+# stray staging leftover, not part of the project
+/Claude outputs/

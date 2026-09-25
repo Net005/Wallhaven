@@ -1,0 +1,23 @@
+services:
+  wallhaven:
+    # Pulled from GHCR (built by .github/workflows/docker.yml). To build locally
+    # instead: `docker compose up -d --build`
+    image: ghcr.io/net005/wallhaven:${WALLHAVEN_TAG:-latest}
+    build: .
+    container_name: wallhaven
+    restart: unless-stopped
+    user: "${PUID:-1000}:${PGID:-1000}"
+    ports:
+      - "${WALLHAVEN_PORT:-8080}:8080"
+    environment:
+      TZ: ${TZ:-Europe/Amsterdam}
+      # Optional: seed the API key on first start (can also be set in the UI)
+      WH_API_KEY: ${WH_API_KEY:-}
+      # Optional: protect the web UI with basic auth
+      WH_USER: ${WH_USER:-}
+      WH_PASS: ${WH_PASS:-}
+    volumes:
+      # config.json + run history
+      - ${WALLHAVEN_DATA:-./data}:/data
+      # where wallpapers are stored (== "Base download directory" in Settings)
+      - ${WALLHAVEN_LIBRARY:-./wallpapers}:/wallpapers

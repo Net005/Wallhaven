@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Wallhaven Control</title>
+<link rel="icon" href="favicon.svg">
+<link rel="stylesheet" href="app.css">
+</head>
+<body class="blur">
+<header id="top">
+  <a class="logo" href="#/dashboard">wallhaven<b>control</b></a>
+  <nav id="nav">
+    <a href="#/dashboard" data-v="dashboard">Dashboard</a>
+    <a href="#/presets" data-v="presets">Presets</a>
+    <a href="#/queue" data-v="queue">Queue <span class="badge" id="qbadge" hidden>0</span></a>
+    <a href="#/gallery" data-v="gallery">Gallery</a>
+    <a href="#/schedules" data-v="schedules">Schedules</a>
+    <a href="#/settings" data-v="settings">Settings</a>
+  </nav>
+  <div class="top-right">
+    <span id="conn" class="pill off">offline</span>
+    <button id="blurBtn" class="btn sm" title="Blur thumbnails (hover to reveal)">Blur: on</button>
+  </div>
+</header>
+<main id="view"></main>
+
+<section id="dock" data-size="1">
+  <div id="dockbar">
+    <div class="dock-title"><span class="dot" id="dockdot"></span> Live log <span class="muted" id="logcount"></span></div>
+    <div class="chips" id="chips">
+      <button data-l="info" class="on">info</button><button data-l="ok" class="on">ok</button><button data-l="warn" class="on">warn</button><button data-l="err" class="on">error</button><button data-l="skip" class="on">skipped</button>
+    </div>
+    <input id="logq" type="search" placeholder="filter log…">
+    <label class="chk"><input type="checkbox" id="autoscroll" checked> follow</label>
+    <button class="btn sm" id="logdl" title="Download log">⤓</button>
+    <button class="btn sm" id="logclr" title="Clear log">Clear</button>
+    <button class="btn sm" id="dockSize" title="Resize">▲▼</button>
+  </div>
+  <div id="log"></div>
+</section>
+<div id="modal-root"></div>
+<div id="toasts"></div>
+<script src="app.js"></script>
+</body>
+</html>
