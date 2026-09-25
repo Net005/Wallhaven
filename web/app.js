@@ -82,10 +82,6 @@ window.addEventListener('hashchange', route);
 async function refreshCfg() { S.cfg = await api('GET', '/api/config') }
 const presetById = id => S.cfg.presets.find(p => p.id === id);
 
-$('#blurBtn').onclick = () => { const on = document.body.classList.toggle('blur'); store.set('blur', on ? '1' : '0'); $('#blurBtn').textContent = 'Blur: ' + (on ? 'on' : 'off') };
-if (store.get('blur', '1') === '0') document.body.classList.remove('blur');
-$('#blurBtn').textContent = 'Blur: ' + (document.body.classList.contains('blur') ? 'on' : 'off');
-
 /* ───────────── shared bits ───────────── */
 const catTags = c => ['g', 'a', 'p'].map((k, i) => `<span class="tag ${k} ${c[i] === '1' ? '' : 'off'}">${'GAP'[i]}</span>`).join('');
 const purTags = p => ['sfw', 'sketchy', 'nsfw'].map((k, i) => `<span class="tag ${k} ${p[i] === '1' ? '' : 'off'}">${['SFW', 'SKT', 'NSFW'][i]}</span>`).join('');
