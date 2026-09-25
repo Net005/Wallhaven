@@ -74,6 +74,7 @@ async function route() {
   const v = views[name] || views.dashboard;
   $$('#nav a').forEach(a => a.classList.toggle('on', a.dataset.v === name));
   if (views.dashboard.timer) { clearInterval(views.dashboard.timer); views.dashboard.timer = null }
+  view?.unmount?.();
   view = null; $('#view').innerHTML = '';
   if (!S.cfg) S.cfg = await api('GET', '/api/config');
   view = v; await v.mount();
@@ -306,21 +307,47 @@ views.queue = {
 
 /* ───────────── gallery ───────────── */
 views.gallery = {
-  items: [], total: 0, i: 0,
+  items: [], total: 0, i: 0, gen: 0, loading: false, io: null, visible: false,
   async mount() {
     $('#view').innerHTML = `<h1>Gallery <span class="grow"></span><select id="gp" style="width:240px"><option value="all">All presets</option>${S.cfg.presets.map(p => `<option value="${p.id}">${esc(p.icon)} ${esc(p.name)}</option>`).join('')}</select></h1>
-     <div class="gal" id="gal"></div><div class="row" style="justify-content:center;margin-top:14px"><button class="btn" id="more">Load more</button><span class="muted" id="gcount"></span></div>`;
-    $('#gp').onchange = () => this.reset(); $('#more').onclick = () => this.load();
+     <div class="gal" id="gal"></div>
+     <div id="sentinel" style="height:1px"></div>
+     <div class="row" style="justify-content:center;margin-top:14px"><div class="muted" id="gspin" hidden>Loading…</div><button class="btn" id="more" hidden>Load more</button><span class="muted" id="gcount"></span></div>`;
+    $('#gp').onchange = () => this.reset();
+    $('#more').onclick = () => this.load();
     $('#gal').onclick = e => { const t = e.target.closest('.thumb'); if (t) this.open(+t.dataset.i) };
+    if (this.io) this.io.disconnect();
+    this.visible = false;
+    this.io = new IntersectionObserver(es => { this.visible = es.some(e => e.isIntersecting); if (this.visible) this.load() }, { rootMargin: '600px' });
+    this.io.observe($('#sentinel'));
     await this.reset();
   },
-  async reset() { this.items = []; $('#gal').innerHTML = ''; await this.load() },
+  unmount() { if (this.io) { this.io.disconnect(); this.io = null } },
+  async reset() {
+    this.gen++; this.loading = false; this.visible = false;
+    this.items = []; this.total = 0;
+    $('#gal').innerHTML = ''; $('#gcount').textContent = ''; $('#more').hidden = true;
+    await this.load();
+  },
   async load() {
-    const r = await act(api('GET', `/api/gallery?preset=${$('#gp').value}&offset=${this.items.length}&limit=60`)); if (!r) return;
+    if (this.loading) return;
+    if (this.items.length && this.items.length >= this.total) return;
+    this.loading = true;
+    const myGen = this.gen, preset = $('#gp').value;
+    $('#gspin').hidden = false;
+    const r = await act(api('GET', `/api/gallery?preset=${preset}&offset=${this.items.length}&limit=60`));
+    if (myGen !== this.gen || preset !== $('#gp').value) return; // preset changed mid-flight — discard this response
+    this.loading = false;
+    $('#gspin').hidden = true;
+    if (!r) return;
     this.total = r.total; const start = this.items.length; this.items.push(...r.items);
     $('#gal').insertAdjacentHTML('beforeend', r.items.map((it, k) => `<div class="thumb" data-i="${start + k}"><img loading="lazy" src="${it.url}" alt=""><div class="cap">${esc(it.name)} · ${fmtBytes(it.size)}</div></div>`).join(''));
-    $('#more').hidden = this.items.length >= this.total; $('#gcount').textContent = `${this.items.length} / ${this.total}`;
+    const done = this.items.length >= this.total;
+    $('#more').hidden = true; // infinite scroll drives loading; kept as a hidden manual fallback
+    $('#gcount').textContent = `${this.items.length} / ${this.total}`;
     if (!this.total) $('#gal').innerHTML = '<div class="empty" style="grid-column:1/-1">No wallpapers yet — run a preset.</div>';
+    // if the sentinel is still on screen after this batch (short/empty viewport), keep filling
+    if (!done && this.visible) this.load();
   },
   open(i) {
     this.i = i; const it = this.items[i]; if (!it) return; const lb = $('#lb');
