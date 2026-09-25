@@ -307,7 +307,7 @@ views.queue = {
 
 /* ───────────── gallery ───────────── */
 views.gallery = {
-  items: [], total: 0, i: 0, gen: 0, loading: false, io: null, visible: false,
+  items: [], total: 0, i: 0, gen: 0, loading: false, loadPromise: null, io: null, visible: false, preloaded: new Set(),
   async mount() {
     $('#view').innerHTML = `<h1>Gallery <span class="grow"></span><select id="gp" style="width:240px"><option value="all">All presets</option>${S.cfg.presets.map(p => `<option value="${p.id}">${esc(p.icon)} ${esc(p.name)}</option>`).join('')}</select></h1>
      <div class="gal" id="gal"></div>
@@ -324,37 +324,66 @@ views.gallery = {
   },
   unmount() { if (this.io) { this.io.disconnect(); this.io = null } },
   async reset() {
-    this.gen++; this.loading = false; this.visible = false;
+    this.gen++; this.loading = false; this.visible = false; this.loadPromise = null;
     this.items = []; this.total = 0;
     $('#gal').innerHTML = ''; $('#gcount').textContent = ''; $('#more').hidden = true;
     await this.load();
   },
-  async load() {
-    if (this.loading) return;
-    if (this.items.length && this.items.length >= this.total) return;
+  // Returns a promise that resolves once a fetch in flight (or just started) has settled,
+  // so callers like step() can await "there may be more items now" instead of racing it.
+  load() {
+    if (this.loading) return this.loadPromise || Promise.resolve();
+    if (this.items.length && this.items.length >= this.total) return Promise.resolve();
     this.loading = true;
     const myGen = this.gen, preset = $('#gp').value;
     $('#gspin').hidden = false;
-    const r = await act(api('GET', `/api/gallery?preset=${preset}&offset=${this.items.length}&limit=60`));
-    if (myGen !== this.gen || preset !== $('#gp').value) return; // preset changed mid-flight — discard this response
-    this.loading = false;
-    $('#gspin').hidden = true;
-    if (!r) return;
-    this.total = r.total; const start = this.items.length; this.items.push(...r.items);
-    $('#gal').insertAdjacentHTML('beforeend', r.items.map((it, k) => `<div class="thumb" data-i="${start + k}"><img loading="lazy" src="${it.url}" alt=""><div class="cap">${esc(it.name)} · ${fmtBytes(it.size)}</div></div>`).join(''));
-    const done = this.items.length >= this.total;
-    $('#more').hidden = true; // infinite scroll drives loading; kept as a hidden manual fallback
-    $('#gcount').textContent = `${this.items.length} / ${this.total}`;
-    if (!this.total) $('#gal').innerHTML = '<div class="empty" style="grid-column:1/-1">No wallpapers yet — run a preset.</div>';
-    // if the sentinel is still on screen after this batch (short/empty viewport), keep filling
-    if (!done && this.visible) this.load();
+    this.loadPromise = (async () => {
+      const r = await act(api('GET', `/api/gallery?preset=${preset}&offset=${this.items.length}&limit=60`));
+      if (myGen !== this.gen || preset !== $('#gp').value) return; // preset changed mid-flight — discard this response
+      if (!r) return;
+      this.total = r.total; const start = this.items.length; this.items.push(...r.items);
+      $('#gal').insertAdjacentHTML('beforeend', r.items.map((it, k) => `<div class="thumb" data-i="${start + k}"><img loading="lazy" src="${it.url}" alt=""><div class="cap">${esc(it.name)} · ${fmtBytes(it.size)}</div></div>`).join(''));
+      const done = this.items.length >= this.total;
+      $('#more').hidden = true; // infinite scroll drives loading; kept as a hidden manual fallback
+      $('#gcount').textContent = `${this.items.length} / ${this.total}`;
+      if (!this.total) $('#gal').innerHTML = '<div class="empty" style="grid-column:1/-1">No wallpapers yet — run a preset.</div>';
+      // if the sentinel is still on screen after this batch (short/empty viewport), keep filling
+      if (!done && this.visible) this.load();
+    })().finally(() => { this.loading = false; $('#gspin').hidden = true });
+    return this.loadPromise;
   },
   open(i) {
     this.i = i; const it = this.items[i]; if (!it) return; const lb = $('#lb');
     lb.innerHTML = `<div class="bar2"><span class="grow">${esc(it.name)} · ${fmtBytes(it.size)} · ${i + 1}/${this.items.length}</span><a class="btn sm" href="${it.url}" target="_blank">Open</a><button class="btn sm danger" id="lbdel">Delete</button><button class="btn sm" id="lbx">✕</button></div><div class="nav" style="left:0" data-d="-1">‹</div><img src="${it.url}" alt=""><div class="nav" style="right:0" data-d="1">›</div>`;
     lb.classList.add('on');
+    this.preloadAround(i);
   },
-  step(d) { const n = this.i + d; if (n >= 0 && n < this.items.length) this.open(n) }
+  // Smart preloading: warm the next few full-res images in either direction so J/K feels
+  // instant, and start fetching the next page early once navigation gets close to the edge
+  // of what's currently loaded (rather than waiting until we actually run out).
+  preloadAround(i) {
+    for (const d of [1, -1, 2, -2, 3]) {
+      const n = i + d;
+      if (n >= 0 && n < this.items.length) this.preloadOne(n);
+    }
+    if (this.items.length - i <= 6 && this.items.length < this.total) this.load();
+  },
+  preloadOne(n) {
+    const it = this.items[n];
+    if (!it || this.preloaded.has(it.url)) return;
+    this.preloaded.add(it.url);
+    const img = new Image(); img.src = it.url;
+  },
+  async step(d) {
+    let n = this.i + d;
+    if (n < 0) return;
+    if (n >= this.items.length) {
+      if (this.items.length >= this.total) return; // truly the last item
+      await this.load();
+      if (n >= this.items.length) return; // load settled and there still isn't one
+    }
+    this.open(n);
+  }
 };
 document.body.insertAdjacentHTML('beforeend', '<div id="lb"></div>');
 $('#lb').addEventListener('click', async e => {
@@ -366,7 +395,12 @@ $('#lb').addEventListener('click', async e => {
     if (await act(api('DELETE', `/api/files/${it.preset}/${encodeURIComponent(it.name)}`), 'Deleted')) { $('#lb').classList.remove('on'); g.reset() }
   }
 });
-document.addEventListener('keydown', e => { if ($('#lb').classList.contains('on')) { if (e.key === 'ArrowLeft') views.gallery.step(-1); if (e.key === 'ArrowRight') views.gallery.step(1) } });
+document.addEventListener('keydown', e => {
+  if (!$('#lb').classList.contains('on')) return;
+  const k = e.key.toLowerCase();
+  if (e.key === 'ArrowLeft' || k === 'k') { e.preventDefault(); views.gallery.step(-1) }
+  else if (e.key === 'ArrowRight' || k === 'j') { e.preventDefault(); views.gallery.step(1) }
+});
 
 /* ───────────── schedules ───────────── */
 views.schedules = {
