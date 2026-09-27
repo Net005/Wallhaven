@@ -48,12 +48,13 @@ $('#logclr').onclick = () => act(api('POST', '/api/logs/clear'));
 $('#logdl').onclick = () => { location.href = '/api/logs/download' };
 $('#dockSize').onclick = () => { const d = $('#dock'); const n = (+d.dataset.size + 1) % 3; d.dataset.size = n; store.set('dock', n) };
 $('#dock').dataset.size = store.get('dock', '1');
+$('#navLog').onclick = e => { e.preventDefault(); $('#dock').classList.toggle('open'); $('#navLog').classList.toggle('on', $('#dock').classList.contains('open')) };
+$('#dockClose').onclick = () => { $('#dock').classList.remove('open'); $('#navLog').classList.remove('on') };
 
 /* ───────────── SSE ───────────── */
 function connect() {
   const es = new EventSource('/api/events');
-  es.onopen = () => { $('#conn').textContent = 'live'; $('#conn').classList.remove('off') };
-  es.onerror = () => { $('#conn').textContent = 'offline'; $('#conn').classList.add('off'); $('#dockdot').classList.remove('live') };
+  es.onerror = () => { $('#dockdot').classList.remove('live') };
   es.addEventListener('backlog', e => { logEl.innerHTML = ''; logN = 0; pend = JSON.parse(e.data); flushLog() });
   es.addEventListener('log', e => addLog(JSON.parse(e.data)));
   es.addEventListener('clear', () => { logEl.innerHTML = ''; logN = 0; $('#logcount').textContent = '' });

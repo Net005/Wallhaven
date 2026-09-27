@@ -16,17 +16,15 @@
     <a href="#/queue" data-v="queue">Queue <span class="badge" id="qbadge" hidden>0</span></a>
     <a href="#/gallery" data-v="gallery">Gallery</a>
     <a href="#/schedules" data-v="schedules">Schedules</a>
+    <a href="#" id="navLog"><span class="dot" id="dockdot"></span> Log</a>
     <a href="#/settings" data-v="settings">Settings</a>
   </nav>
-  <div class="top-right">
-    <span id="conn" class="pill off">offline</span>
-  </div>
 </header>
 <main id="view"></main>
 
 <section id="dock" data-size="1">
   <div id="dockbar">
-    <div class="dock-title"><span class="dot" id="dockdot"></span> Live log <span class="muted" id="logcount"></span></div>
+    <div class="dock-title">Live log <span class="muted" id="logcount"></span></div>
     <div class="chips" id="chips">
       <button data-l="info" class="on">info</button><button data-l="ok" class="on">ok</button><button data-l="warn" class="on">warn</button><button data-l="err" class="on">error</button><button data-l="skip" class="on">skipped</button>
     </div>
@@ -35,6 +33,7 @@
     <button class="btn sm" id="logdl" title="Download log">⤓</button>
     <button class="btn sm" id="logclr" title="Clear log">Clear</button>
     <button class="btn sm" id="dockSize" title="Resize">▲▼</button>
+    <button class="btn sm" id="dockClose" title="Close">✕</button>
   </div>
   <div id="log"></div>
 </section>
