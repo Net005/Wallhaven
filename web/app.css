@@ -87,20 +87,16 @@ tr:hover td{background:#2e2e2e}
 #lb .nav{position:absolute;top:50%;font-size:40px;color:#aaa;cursor:pointer;padding:20px;user-select:none}
 #lb .nav:hover{color:#fff}
 
-/* dock / log — a dropdown panel opened from the "Log" nav link, not a fixed bottom bar */
-#dock{position:fixed;top:46px;left:0;right:0;z-index:30;background:#101010;border-bottom:1px solid #000;box-shadow:0 4px 24px rgba(0,0,0,.6);display:none}
-#dock.open{display:block}
-#dockbar{display:flex;gap:10px;align-items:center;padding:5px 12px;background:#181818;flex-wrap:wrap}
-.dock-title{font-weight:600;color:var(--white);display:flex;align-items:center;gap:7px;min-width:100px}
+/* live log — its own page (views.log), not an overlay */
 .dot{width:9px;height:9px;border-radius:50%;background:#666}.dot.live{background:var(--ok);box-shadow:0 0 6px var(--ok)}
+.logbar{display:flex;gap:10px;align-items:center;padding:10px 14px;background:var(--panel2);border-bottom:1px solid #000;flex-wrap:wrap;border-radius:var(--radius) var(--radius) 0 0}
 #logq{width:190px;padding:3px 8px}
 .chips{display:flex;gap:3px}.chips button{background:#262626;border:1px solid #000;border-radius:2px;color:#777;font-size:11px;padding:1px 8px;cursor:pointer}
 .chips button.on{color:#eee;background:#3a3a3a}
-#log{height:320px;overflow:auto;font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:6px 12px}
-#dock[data-size="0"] #log{height:120px}#dock[data-size="2"] #log{height:70vh}
+#log{height:65vh;overflow:auto;font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:10px 14px}
+#log[data-size="0"]{height:38vh}#log[data-size="2"]{height:82vh}
 .ln{white-space:pre-wrap;word-break:break-all}.ln .t{color:#555;margin-right:8px}
 .l-info{color:#b8c7d8}.l-ok{color:var(--ok)}.l-warn{color:var(--warn)}.l-err{color:var(--err)}.l-skip{color:#666}.l-head{color:var(--accent);font-weight:600}
-#log.h-info .l-info,#log.h-ok .l-ok,#log.h-warn .l-warn,#log.h-err .l-err,#log.h-skip .l-skip{display:none}
 .ln.nomatch{display:none}
 
 /* modal */

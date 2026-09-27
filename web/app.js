@@ -23,41 +23,51 @@ const act = async (p, ok) => { try { const r = await p; if (ok) toast(ok, 'ok');
 const S = { cur: null, queue: [], paused: false, histRev: -1, hist: [], cfg: null, stats: null };
 let view = null;
 
-/* ───────────── live log dock ───────────── */
-const logEl = $('#log'); let logQ = '', logN = 0, pend = [], raf = 0;
+/* ───────────── live log buffer ─────────────
+   The buffer lives independently of the DOM so it survives navigating away from and back
+   to the Log page (views.log, below) — only the #log element itself comes and goes. */
+let logLines = [], logQ = '', logHidden = {}, autoscrollOn = true, pend = [], raf = 0;
 function lineEl(l) {
-  const d = document.createElement('div'); d.className = 'ln l-' + l.lvl; d.dataset.t = l.msg.toLowerCase();
+  const d = document.createElement('div'); d.className = 'ln l-' + l.lvl; d.dataset.lvl = l.lvl; d.dataset.t = l.msg.toLowerCase();
   d.innerHTML = `<span class="t">${clock(l.t)}</span>${esc(l.msg)}`;
-  if (logQ && !d.dataset.t.includes(logQ)) d.classList.add('nomatch');
+  if (logHidden[l.lvl] || (logQ && !d.dataset.t.includes(logQ))) d.classList.add('nomatch');
   return d;
 }
-function flushLog() {
-  raf = 0; const stick = $('#autoscroll').checked;
-  const frag = document.createDocumentFragment(); pend.forEach(l => frag.append(lineEl(l))); logN += pend.length; pend = [];
-  logEl.append(frag);
-  while (logEl.childElementCount > 3000) logEl.firstChild.remove();
-  $('#logcount').textContent = logN + ' lines';
-  if (stick) logEl.scrollTop = logEl.scrollHeight;
+function logScrollBottom() { const el = $('#log'); if (el) el.scrollTop = el.scrollHeight }
+function renderAllLog() {
+  const el = $('#log'); if (!el) return;
+  el.innerHTML = '';
+  const frag = document.createDocumentFragment();
+  logLines.forEach(l => frag.append(lineEl(l)));
+  el.append(frag);
+  $('#logcount').textContent = logLines.length + ' lines';
+  if (autoscrollOn) logScrollBottom();
 }
-const addLog = l => { pend.push(l); if (!raf) raf = requestAnimationFrame(flushLog) };
-logEl.addEventListener('scroll', () => { $('#autoscroll').checked = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 30 });
-$('#autoscroll').addEventListener('change', e => { if (e.target.checked) logEl.scrollTop = logEl.scrollHeight });
-$('#chips').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; b.classList.toggle('on'); logEl.classList.toggle('h-' + b.dataset.l, !b.classList.contains('on')) });
-$('#logq').addEventListener('input', e => { logQ = e.target.value.toLowerCase(); $$('.ln', logEl).forEach(n => n.classList.toggle('nomatch', !!logQ && !n.dataset.t.includes(logQ))) });
-$('#logclr').onclick = () => act(api('POST', '/api/logs/clear'));
-$('#logdl').onclick = () => { location.href = '/api/logs/download' };
-$('#dockSize').onclick = () => { const d = $('#dock'); const n = (+d.dataset.size + 1) % 3; d.dataset.size = n; store.set('dock', n) };
-$('#dock').dataset.size = store.get('dock', '1');
-$('#navLog').onclick = e => { e.preventDefault(); $('#dock').classList.toggle('open'); $('#navLog').classList.toggle('on', $('#dock').classList.contains('open')) };
-$('#dockClose').onclick = () => { $('#dock').classList.remove('open'); $('#navLog').classList.remove('on') };
+function flushLog() {
+  raf = 0;
+  const el = $('#log');
+  if (el) {
+    const frag = document.createDocumentFragment();
+    pend.forEach(l => frag.append(lineEl(l)));
+    el.append(frag);
+    while (el.childElementCount > 3000) el.firstChild.remove();
+    $('#logcount').textContent = logLines.length + ' lines';
+    if (autoscrollOn) logScrollBottom();
+  }
+  pend = [];
+}
+function addLog(l) {
+  logLines.push(l); if (logLines.length > 3000) logLines.shift();
+  pend.push(l); if (!raf) raf = requestAnimationFrame(flushLog);
+}
 
 /* ───────────── SSE ───────────── */
 function connect() {
   const es = new EventSource('/api/events');
   es.onerror = () => { $('#dockdot').classList.remove('live') };
-  es.addEventListener('backlog', e => { logEl.innerHTML = ''; logN = 0; pend = JSON.parse(e.data); flushLog() });
+  es.addEventListener('backlog', e => { logLines = JSON.parse(e.data).slice(-3000); renderAllLog() });
   es.addEventListener('log', e => addLog(JSON.parse(e.data)));
-  es.addEventListener('clear', () => { logEl.innerHTML = ''; logN = 0; $('#logcount').textContent = '' });
+  es.addEventListener('clear', () => { logLines = []; renderAllLog() });
   es.addEventListener('state', e => {
     const s = JSON.parse(e.data), prevRev = S.histRev;
     S.cur = s.current; S.queue = s.queue; S.paused = s.paused; S.histRev = s.hist_rev;
@@ -450,6 +460,46 @@ views.schedules = {
       <td><select data-f="interval_min">${iv.map(([v, l]) => `<option value="${v}" ${v === s.interval_min ? 'selected' : ''}>${l}</option>`).join('')}${iv.some(x => x[0] === s.interval_min) ? '' : `<option selected value="${s.interval_min}">${s.interval_min} min</option>`}</select></td>
       <td><input type="checkbox" data-f="enabled" ${s.enabled ? 'checked' : ''}></td><td class="muted">${ago(s.last_run)}</td><td class="muted">${s.enabled ? next : '—'}</td><td><button class="btn sm danger" data-del="${i}">✕</button></td></tr>`;
     }).join('') || '<tr><td colspan="6" class="empty">No schedules</td></tr>';
+  }
+};
+
+/* ───────────── log ───────────── */
+views.log = {
+  async mount() {
+    $('#view').innerHTML = `<h1>Live log <span class="muted" id="logcount" style="font-size:12px;font-weight:400"></span></h1>
+    <div class="panel" style="padding:0">
+      <div class="logbar">
+        <div class="chips" id="chips">
+          <button data-l="info" class="${logHidden.info ? '' : 'on'}">info</button>
+          <button data-l="ok" class="${logHidden.ok ? '' : 'on'}">ok</button>
+          <button data-l="warn" class="${logHidden.warn ? '' : 'on'}">warn</button>
+          <button data-l="err" class="${logHidden.err ? '' : 'on'}">error</button>
+          <button data-l="skip" class="${logHidden.skip ? '' : 'on'}">skipped</button>
+        </div>
+        <input id="logq" type="search" placeholder="filter log…" value="${esc(logQ)}">
+        <label class="chk"><input type="checkbox" id="autoscroll" ${autoscrollOn ? 'checked' : ''}> follow</label>
+        <span class="grow"></span>
+        <button class="btn sm" id="logdl" title="Download full log">⤓ Download</button>
+        <button class="btn sm" id="logclr" title="Clear log">Clear</button>
+        <button class="btn sm" id="logSize" title="Resize">⤢ Size</button>
+      </div>
+      <div id="log" data-size="${store.get('logsize', '1')}"></div>
+    </div>`;
+    $('#chips').addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      b.classList.toggle('on'); logHidden[b.dataset.l] = !b.classList.contains('on');
+      $$('.ln', $('#log')).forEach(n => n.classList.toggle('nomatch', !!logHidden[n.dataset.lvl] || (!!logQ && !n.dataset.t.includes(logQ))));
+    });
+    $('#logq').addEventListener('input', e => {
+      logQ = e.target.value.toLowerCase();
+      $$('.ln', $('#log')).forEach(n => n.classList.toggle('nomatch', !!logHidden[n.dataset.lvl] || (!!logQ && !n.dataset.t.includes(logQ))));
+    });
+    $('#logclr').onclick = () => act(api('POST', '/api/logs/clear'));
+    $('#logdl').onclick = () => { location.href = '/api/logs/download' };
+    $('#logSize').onclick = () => { const el = $('#log'); const n = (+el.dataset.size + 1) % 3; el.dataset.size = n; store.set('logsize', n) };
+    $('#log').addEventListener('scroll', () => { const el = $('#log'); autoscrollOn = el.scrollHeight - el.scrollTop - el.clientHeight < 30; $('#autoscroll').checked = autoscrollOn });
+    $('#autoscroll').addEventListener('change', e => { autoscrollOn = e.target.checked; if (autoscrollOn) logScrollBottom() });
+    renderAllLog();
   }
 };
 
