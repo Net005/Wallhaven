@@ -82,6 +82,9 @@ async function route() {
 window.addEventListener('hashchange', route);
 async function refreshCfg() { S.cfg = await api('GET', '/api/config') }
 const presetById = id => S.cfg.presets.find(p => p.id === id);
+// Display order for pickers/grids: alphabetical by name. The Presets admin table keeps the
+// raw array order instead, since its ↑/↓ controls set the actual "Run all"/schedule queue order.
+const byName = (list) => [...list].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
 
 /* ───────────── shared bits ───────────── */
 const catTags = c => ['g', 'a', 'p'].map((k, i) => `<span class="tag ${k} ${c[i] === '1' ? '' : 'off'}">${'GAP'[i]}</span>`).join('');
@@ -149,7 +152,7 @@ views.dashboard = {
   },
   grid() {
     const st = Object.fromEntries((S.stats?.presets || []).map(x => [x.id, x]));
-    $('#grid').innerHTML = S.cfg.presets.map(p => {
+    $('#grid').innerHTML = byName(S.cfg.presets).map(p => {
       const x = st[p.id] || {}, run = S.cur?.preset_id === p.id, q = S.queue.some(j => j.preset_id === p.id);
       const sub = p.type === 'useruploads' ? '@' + p.user : p.type === 'collections' ? p.user + ' / ' + p.collection : p.query || p.type;
       return `<div class="card ${run ? 'running' : ''}" style="--stripe:${stripe(p.purity)}"><div class="in">
@@ -184,6 +187,12 @@ views.dashboard = {
 
 /* ───────────── preset editor ───────────── */
 const COLORS = ['660000', '990000', 'cc0000', 'cc3333', 'ea4c88', '993399', '663399', '333399', '0066cc', '0099cc', '66cccc', '77cc33', '669900', '336600', '666600', '999900', 'cccc33', 'ffff00', 'ffcc33', 'ff9900', 'ff6600', 'cc6633', '996633', '663300', '000000', '999999', 'cccccc', 'ffffff', '424153'];
+// Preset icons are just plain emoji characters typed into the "icon" text field — there is no
+// icon system or asset behind them. This is a curated picker of emoji to choose from; typing
+// any other emoji (or text) directly into the field still works.
+const ICONS = [
+  ['🖼️', 'picture frame wallpaper'], ['🏞️', 'landscape nature'], ['🌄', 'sunrise mountain'], ['🌅', 'sunrise'], ['🌆', 'cityscape dusk'], ['🌇', 'sunset city'], ['🌉', 'bridge night'], ['🌌', 'milky way galaxy space'], ['🌠', 'shooting star'], ['🏙️', 'skyline city'], ['🗻', 'mountain fuji'], ['⛰️', 'mountain'], ['🏔️', 'snow mountain'], ['🌋', 'volcano'], ['🏜️', 'desert'], ['🏝️', 'island beach'], ['🏖️', 'beach'], ['🌊', 'wave ocean water'], ['🌈', 'rainbow'], ['⛅', 'cloud sun'], ['☁️', 'cloud'], ['⛈️', 'storm thunder'], ['🌧️', 'rain'], ['❄️', 'snowflake winter'], ['🌫️', 'fog mist'], ['🌪️', 'tornado'], ['🔥', 'fire flame'], ['💧', 'water drop'], ['🌸', 'blossom flower anime pink'], ['🌺', 'flower hibiscus'], ['🌻', 'sunflower'], ['🌷', 'tulip flower'], ['🌹', 'rose flower'], ['💮', 'flower white'], ['🍁', 'maple leaf autumn'], ['🍃', 'leaf nature'], ['🌲', 'tree pine forest'], ['🌳', 'tree forest'], ['🌴', 'palm tree tropical'], ['🌵', 'cactus'], ['🍂', 'leaves fall'], ['🦋', 'butterfly'], ['🐉', 'dragon fantasy'], ['🐲', 'dragon face'], ['🦄', 'unicorn fantasy'], ['🐺', 'wolf animal'], ['🦊', 'fox animal'], ['🦁', 'lion animal'], ['🐯', 'tiger animal'], ['🐼', 'panda animal'], ['🦅', 'eagle bird'], ['🐦', 'bird'], ['🐬', 'dolphin ocean'], ['🐳', 'whale ocean'], ['🐙', 'octopus ocean'], ['🦑', 'squid ocean'], ['🐠', 'fish ocean'], ['🌍', 'earth globe world'], ['🪐', 'planet saturn space'], ['🌑', 'moon dark space'], ['🌕', 'moon full space'], ['🌙', 'moon crescent space'], ['⭐', 'star space'], ['✨', 'sparkles stars'], ['☄️', 'comet space'], ['🚀', 'rocket space ship'], ['🛸', 'ufo space alien'], ['👽', 'alien'], ['🤖', 'robot mecha scifi'], ['🎮', 'game controller games'], ['🕹️', 'joystick games retro'], ['👾', 'invader pixel game'], ['🎲', 'dice games'], ['🃏', 'card game joker'], ['♟️', 'chess pawn strategy'], ['⚔️', 'swords fantasy fight'], ['🛡️', 'shield fantasy'], ['🏹', 'bow arrow fantasy'], ['🗡️', 'dagger sword fantasy'], ['🔮', 'crystal ball magic fantasy'], ['🧙', 'wizard mage fantasy'], ['🧝', 'elf fantasy'], ['🧛', 'vampire fantasy'], ['👹', 'ogre demon fantasy'], ['👺', 'goblin fantasy'], ['💀', 'skull dark'], ['👻', 'ghost spooky'], ['🎃', 'pumpkin halloween'], ['🩸', 'blood dark horror'], ['🖤', 'black heart dark'], ['❤️', 'heart love'], ['💖', 'sparkle heart cute'], ['💘', 'heart arrow love'], ['😈', 'devil face nsfw'], ['💋', 'kiss lips'], ['👙', 'bikini swimsuit'], ['👗', 'dress fashion'], ['👠', 'heels fashion'], ['💃', 'woman dancing'], ['🕺', 'man dancing'], ['👩', 'woman person'], ['👨', 'man person'], ['👤', 'silhouette person'], ['🎌', 'crossed flags japan anime'], ['🗾', 'japan map'], ['⛩️', 'shrine torii japan'], ['🍥', 'narutomaki anime food'], ['🍜', 'ramen food anime'], ['🎏', 'koinobori japan'], ['🎨', 'art palette digital art'], ['🖌️', 'paintbrush art'], ['🖍️', 'crayon art'], ['✏️', 'pencil art sketch'], ['📷', 'camera photo'], ['📸', 'camera flash photo'], ['🎞️', 'film frames'], ['🎬', 'clapper movie film'], ['🎭', 'masks drama theater'], ['🎵', 'music note'], ['🎧', 'headphones music'], ['🎹', 'piano music'], ['🎸', 'guitar music'], ['🏎️', 'race car speed'], ['🚗', 'car vehicle'], ['🏍️', 'motorcycle vehicle'], ['✈️', 'airplane vehicle'], ['🚁', 'helicopter vehicle'], ['🚂', 'train vehicle'], ['⛵', 'sailboat vehicle'], ['🏰', 'castle fantasy building'], ['🏯', 'japanese castle'], ['🕌', 'mosque building'], ['🗼', 'tower building'], ['🌐', 'globe network abstract'], ['💎', 'gem diamond abstract'], ['🔷', 'diamond shape abstract'], ['🔶', 'diamond orange abstract'], ['⬛', 'black square abstract'], ['⚛️', 'atom abstract science'], ['🧬', 'dna abstract science'], ['💡', 'bulb idea light'], ['🕯️', 'candle light'], ['🔆', 'bright light'], ['🌀', 'cyclone swirl abstract'], ['🏁', 'checkered flag finish'], ['🏆', 'trophy'], ['🎯', 'target dart'], ['🧩', 'puzzle piece'], ['📚', 'books'], ['🗺️', 'map'], ['🧭', 'compass'], ['⚙️', 'gear settings'], ['🔞', 'nsfw eighteen'], ['⚡', 'lightning bolt energy'],
+];
 const seg = (name, cls, labels, val) => `<div class="seg ${cls}" data-seg="${name}">${labels.map((l, i) => `<button type="button" class="${val[i] === '1' ? 'on' : ''}">${l}</button>`).join('')}</div>`;
 const segVal = (root, n) => $$(`[data-seg=${n}] button`, root).map(b => b.classList.contains('on') ? '1' : '0').join('');
 const opts = (list, cur) => list.map(([v, l]) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${l}</option>`).join('');
@@ -193,9 +202,10 @@ function presetEditor(p, customRun = false) {
   p = p || { icon: '🖼️', name: customRun ? 'Custom run' : '', type: 'search', categories: '100', purity: '110', count: 640, start_page: 1, atleast: '1920x1080', resolutions: '', ratios: '16x9,16x10,21x9', sorting: 'date_added', order: 'desc', top_range: '1M', colors: '', in_all: true, query: '', user: '', collection: '', location: '' };
   const m = modal(`<header>${customRun ? 'Custom run (not saved)' : isNew ? 'New preset' : 'Edit preset'}</header>
   <div class="body">
-   <div class="c1"><label class="f">Icon</label><input type="text" id="e_icon" value="${esc(p.icon)}" maxlength="4"></div>
-   <div class="c3"><label class="f">Name</label><input type="text" id="e_name" value="${esc(p.name)}"></div>
+   <div class="c2"><label class="f">Icon</label><div class="row" style="gap:4px;flex-wrap:nowrap"><input type="text" id="e_icon" value="${esc(p.icon)}" maxlength="8" style="width:52px;text-align:center;font-size:18px;flex:none"><button type="button" class="btn sm" id="e_iconpick" title="Browse icons">Browse…</button></div></div>
+   <div class="c2"><label class="f">Name</label><input type="text" id="e_name" value="${esc(p.name)}"></div>
    <div class="c2"><label class="f">Type</label><select id="e_type">${opts([['search', 'Search / tag'], ['standard', 'Standard (no query)'], ['useruploads', 'User uploads'], ['collections', 'Collection']], p.type)}</select></div>
+   <div class="c6" id="iconbox" style="display:none"><input type="search" id="e_iconq" placeholder="Search icons… (e.g. space, anime, fire)" style="margin-bottom:6px"><div class="emoji-grid" id="e_icongrid"></div></div>
    <div class="c6 t-search"><label class="f">Search query <span class="muted">(tag: id:37 · text · +tag -tag)</span></label><input type="text" id="e_query" value="${esc(p.query)}"></div>
    <div class="c3 t-user"><label class="f">Username</label><input type="text" id="e_user" value="${esc(p.user)}"></div>
    <div class="c3 t-coll"><label class="f">Collection name</label><input type="text" id="e_collection" value="${esc(p.collection)}"></div>
@@ -225,6 +235,22 @@ function presetEditor(p, customRun = false) {
     show('.t-search', t === 'search'); show('.t-user', t === 'useruploads' || t === 'collections'); show('.t-coll', t === 'collections');
   };
   g('e_type').onchange = showTypes; showTypes();
+  const drawIcons = q => {
+    q = q.trim().toLowerCase();
+    const list = q ? ICONS.filter(([e, k]) => k.includes(q)) : ICONS;
+    g('e_icongrid').innerHTML = list.map(([e]) => `<button type="button" data-e="${e}" class="${e === g('e_icon').value ? 'on' : ''}" title="${e}">${e}</button>`).join('') || '<span class="muted" style="padding:6px">No matches</span>';
+  };
+  g('e_iconpick').onclick = () => {
+    const box = g('iconbox'), show = box.style.display === 'none';
+    box.style.display = show ? '' : 'none';
+    if (show) { g('e_iconq').value = ''; drawIcons(''); g('e_iconq').focus() }
+  };
+  g('e_iconq').oninput = e => drawIcons(e.target.value);
+  g('e_icongrid').addEventListener('click', e => {
+    const b = e.target.closest('button[data-e]'); if (!b) return;
+    g('e_icon').value = b.dataset.e;
+    $$('#e_icongrid button', R).forEach(x => x.classList.toggle('on', x === b));
+  });
   R.addEventListener('click', e => {
     const sb = e.target.closest('.seg button'); if (sb) sb.classList.toggle('on');
     const cb = e.target.closest('#e_colors button'); if (cb) { $$('#e_colors button', R).forEach(b => b.classList.remove('on')); cb.classList.add('on') }
@@ -309,7 +335,7 @@ views.queue = {
 views.gallery = {
   items: [], total: 0, i: 0, gen: 0, loading: false, loadPromise: null, io: null, visible: false, preloaded: new Set(),
   async mount() {
-    $('#view').innerHTML = `<h1>Gallery <span class="grow"></span><select id="gp" style="width:240px"><option value="all">All presets</option>${S.cfg.presets.map(p => `<option value="${p.id}">${esc(p.icon)} ${esc(p.name)}</option>`).join('')}</select></h1>
+    $('#view').innerHTML = `<h1>Gallery <span class="grow"></span><select id="gp" style="width:240px"><option value="all">All presets</option>${byName(S.cfg.presets).map(p => `<option value="${p.id}">${esc(p.icon)} ${esc(p.name)}</option>`).join('')}</select></h1>
      <div class="gal" id="gal"></div>
      <div id="sentinel" style="height:1px"></div>
      <div class="row" style="justify-content:center;margin-top:14px"><div class="muted" id="gspin" hidden>Loading…</div><button class="btn" id="more" hidden>Load more</button><span class="muted" id="gcount"></span></div>`;
@@ -419,7 +445,7 @@ views.schedules = {
     const iv = [[60, 'hour'], [180, '3 hours'], [360, '6 hours'], [720, '12 hours'], [1440, 'day'], [2880, '2 days'], [10080, 'week']];
     $('#sb').innerHTML = this.list.map((s, i) => {
       const next = isZero(s.last_run) ? '—' : new Date(new Date(s.last_run).getTime() + s.interval_min * 60000).toLocaleString();
-      return `<tr data-i="${i}"><td><select data-f="preset"><option value="all" ${s.preset === 'all' ? 'selected' : ''}>All presets</option>${S.cfg.presets.map(p => `<option value="${p.id}" ${p.id === s.preset ? 'selected' : ''}>${esc(p.icon)} ${esc(p.name)}</option>`).join('')}</select></td>
+      return `<tr data-i="${i}"><td><select data-f="preset"><option value="all" ${s.preset === 'all' ? 'selected' : ''}>All presets</option>${byName(S.cfg.presets).map(p => `<option value="${p.id}" ${p.id === s.preset ? 'selected' : ''}>${esc(p.icon)} ${esc(p.name)}</option>`).join('')}</select></td>
       <td><select data-f="interval_min">${iv.map(([v, l]) => `<option value="${v}" ${v === s.interval_min ? 'selected' : ''}>${l}</option>`).join('')}${iv.some(x => x[0] === s.interval_min) ? '' : `<option selected value="${s.interval_min}">${s.interval_min} min</option>`}</select></td>
       <td><input type="checkbox" data-f="enabled" ${s.enabled ? 'checked' : ''}></td><td class="muted">${ago(s.last_run)}</td><td class="muted">${s.enabled ? next : '—'}</td><td><button class="btn sm danger" data-del="${i}">✕</button></td></tr>`;
     }).join('') || '<tr><td colspan="6" class="empty">No schedules</td></tr>';
